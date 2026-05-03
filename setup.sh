@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  Fedora 44 Setup Script
-#  Run with: bash <(curl -fsSL https://raw.githubusercontent.com/Leonardov31/linux-setup/main/setup.sh)
+#  Run with: bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/setup.sh)
 # =============================================================================
 
 set -euo pipefail
@@ -179,6 +179,101 @@ sudo usermod -aG docker "$CURRENT_USER"
 log "Docker installed and enabled (you'll need to log out/in for group to apply)"
 
 # =============================================================================
+#  6. ANDROID SDK (Command-line tools)
+# =============================================================================
+info "Installing Android SDK dependencies..."
+sudo dnf install -y java-17-openjdk java-17-openjdk-devel unzip wget
+
+# Set JAVA_HOME to JDK 17
+JAVA_HOME_PATH="$(dirname $(dirname $(readlink -f $(which javac))))"
+export JAVA_HOME="$JAVA_HOME_PATH"
+
+ANDROID_HOME="${HOME}/Android/Sdk"
+CMDLINE_TOOLS_DIR="${ANDROID_HOME}/cmdline-tools"
+mkdir -p "$CMDLINE_TOOLS_DIR"
+
+info "Downloading Android command-line tools..."
+CMDTOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
+CMDTOOLS_ZIP="/tmp/cmdline-tools.zip"
+curl -fsSL "$CMDTOOLS_URL" -o "$CMDTOOLS_ZIP"
+unzip -q "$CMDTOOLS_ZIP" -d "$CMDLINE_TOOLS_DIR"
+# Google zips the tools as "cmdline-tools/"; move to the "latest" layout
+mv "${CMDLINE_TOOLS_DIR}/cmdline-tools" "${CMDLINE_TOOLS_DIR}/latest" 2>/dev/null || true
+rm -f "$CMDTOOLS_ZIP"
+
+export PATH="${CMDLINE_TOOLS_DIR}/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+
+info "Accepting Android SDK licenses..."
+yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+info "Installing Android SDK components..."
+sdkmanager --install \
+  "platform-tools" \
+  "platforms;android-35" \
+  "build-tools;35.0.0" \
+  "emulator" \
+  "system-images;android-35;google_apis;x86_64"
+
+log "Android SDK installed at ${ANDROID_HOME}"
+
+# Fish: persist Android environment variables
+cat > "${FISH_CONF_DIR}/android.fish" <<EOF
+# Android SDK
+set -gx ANDROID_HOME "${ANDROID_HOME}"
+set -gx PATH \$PATH "${CMDLINE_TOOLS_DIR}/latest/bin" "${ANDROID_HOME}/platform-tools" "${ANDROID_HOME}/emulator"
+set -gx JAVA_HOME "${JAVA_HOME_PATH}"
+EOF
+
+# =============================================================================
+#  7. FLUTTER (via ASDF)
+# =============================================================================
+info "Installing Flutter via ASDF..."
+
+# Flutter dependencies
+sudo dnf install -y \
+  clang cmake ninja-build gtk3-devel \
+  mesa-libGL-devel mesa-libGLU-devel \
+  libX11-devel libXcomposite-devel libXcursor-devel \
+  libXdamage-devel libXext-devel libXfixes-devel \
+  libXi-devel libXrandr-devel libXrender-devel \
+  libXtst-devel at-spi2-core-devel
+
+asdf plugin add flutter https://github.com/asdf-community/asdf-flutter.git 2>/dev/null || \
+  warn "flutter plugin already added, skipping"
+
+info "Installing latest stable Flutter via ASDF..."
+FLUTTER_VERSION="$(asdf latest flutter)"
+asdf install flutter "$FLUTTER_VERSION"
+asdf set -u flutter "$FLUTTER_VERSION"
+
+# Point Flutter at the Android SDK
+flutter config --android-sdk "$ANDROID_HOME" --no-analytics
+
+# Accept Flutter's copy of Android licenses
+yes | flutter doctor --android-licenses > /dev/null 2>&1 || true
+
+log "Flutter ${FLUTTER_VERSION} installed and configured"
+
+info "Running flutter doctor..."
+flutter doctor || true   # non-fatal; some items may need manual steps
+
+# =============================================================================
+#  8. ZED EDITOR
+# =============================================================================
+info "Installing Zed editor..."
+
+# Zed provides an official install script that handles Linux releases
+curl -fsSL https://zed.dev/install.sh | sh
+
+# The installer places the binary at ~/.local/bin/zed — expose it in Fish
+cat > "${FISH_CONF_DIR}/zed.fish" <<'EOF'
+# Zed editor
+fish_add_path ~/.local/bin
+EOF
+
+log "Zed editor installed (~/.local/bin/zed)"
+
+# =============================================================================
 #  DONE
 # =============================================================================
 echo
@@ -190,8 +285,13 @@ echo -e "  ${BOLD}Next steps:${RESET}"
 echo -e "  1. ${YELLOW}Log out and back in${RESET} — required for:"
 echo -e "     • Fish to be your default shell"
 echo -e "     • Docker group membership"
+echo -e "     • Android/Flutter PATH vars (or: source ~/.config/fish/conf.d/android.fish)"
 echo -e "  2. Open ${BOLD}1Password${RESET} → Settings → Developer → enable SSH Agent"
 echo -e "  3. Verify Node.js:  ${BLUE}node --version${RESET}"
 echo -e "  4. Verify Docker:   ${BLUE}docker run hello-world${RESET}"
-echo -e "  5. Verify ASDF:     ${BLUE}asdf --version${RESET}"
+echo -e "  5. Verify Flutter:  ${BLUE}flutter doctor${RESET}"
+echo -e "  6. Verify Android:  ${BLUE}sdkmanager --list_installed${RESET}"
+echo -e "  7. Verify Zed:      ${BLUE}zed --version${RESET}"
+echo -e "  8. ${YELLOW}Android Studio${RESET} (optional GUI IDE):"
+echo -e "     ${BLUE}flatpak install flathub com.google.AndroidStudio${RESET}"
 echo
