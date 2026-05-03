@@ -230,12 +230,17 @@ log "Docker installed and enabled (log out/in for group membership to apply)"
 # =============================================================================
 #  6. ANDROID SDK (Command-line tools)
 # =============================================================================
-info "Installing Android SDK dependencies (JDK 17)..."
-sudo dnf install -y java-17-openjdk java-17-openjdk-devel
+info "Installing Android SDK dependencies (JDK 21)..."
 
-# Pin JAVA_HOME explicitly to JDK 17 (Fedora may default to JDK 21 system-wide)
-JAVA_HOME_PATH="$(rpm -ql java-17-openjdk-devel | grep -m1 '/bin/javac$' | sed 's|/bin/javac$||')"
-[[ -d "$JAVA_HOME_PATH" ]] || die "Could not locate JDK 17 install root"
+# Fedora 42+ retired the legacy java-(1.8.0, 11, 17)-openjdk packages.
+# Fedora 44 ships JDK 21 as the system OpenJDK; AGP officially targets
+# JDK 17 but runs on JDK 21 with recent Gradle (8.5+). If a project's
+# Gradle wrapper is too old, set its `distributionUrl` to gradle 8.5+.
+sudo dnf install -y java-21-openjdk java-21-openjdk-devel
+
+# Locate the JDK 21 install root (typically /usr/lib/jvm/java-21-openjdk-...)
+JAVA_HOME_PATH="$(rpm -ql java-21-openjdk-devel | grep -m1 '/bin/javac$' | sed 's|/bin/javac$||')"
+[[ -d "$JAVA_HOME_PATH" ]] || die "Could not locate JDK 21 install root"
 export JAVA_HOME="$JAVA_HOME_PATH"
 export PATH="${JAVA_HOME}/bin:${PATH}"
 log "JAVA_HOME pinned to ${JAVA_HOME}"
