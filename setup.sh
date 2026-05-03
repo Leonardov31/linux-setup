@@ -212,13 +212,14 @@ sudo dnf remove -y docker docker-client docker-client-latest docker-common \
 
 sudo dnf install -y dnf-plugins-core
 
-# dnf5 (Fedora 41+) uses `addrepo --from-repofile=`; older dnf uses `--add-repo`.
-# Try the new form first, fall back to the old one.
+# `dnf config-manager addrepo --from-repofile=URL` has a bug in dnf5
+# (rpm-software-management/dnf5#1603): it chokes on empty lines in
+# docker-ce.repo with "Cannot set repository option '#1= '". Sidestep it
+# entirely by writing the .repo file directly, the same way we did for
+# Microsoft Edge and 1Password above.
 DOCKER_REPO_URL="https://download.docker.com/linux/fedora/docker-ce.repo"
-if ! sudo dnf config-manager addrepo --from-repofile="$DOCKER_REPO_URL" 2>/dev/null; then
-  warn "dnf5 addrepo syntax failed, trying legacy --add-repo..."
-  sudo dnf config-manager --add-repo "$DOCKER_REPO_URL"
-fi
+info "Adding Docker CE repo..."
+curl -fsSL "$DOCKER_REPO_URL" | sudo tee /etc/yum.repos.d/docker-ce.repo > /dev/null
 
 sudo dnf install -y docker-ce docker-ce-cli containerd.io \
   docker-buildx-plugin docker-compose-plugin
