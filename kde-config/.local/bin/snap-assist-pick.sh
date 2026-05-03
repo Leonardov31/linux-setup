@@ -12,9 +12,12 @@
 
 DIRECTION="${1:-left}"
 
+QDBUS=$(command -v qdbus6 2>/dev/null || command -v qdbus-qt6 2>/dev/null || command -v qdbus 2>/dev/null)
+[[ -z "$QDBUS" ]] && { echo "qdbus not found" >&2; exit 1; }
+
 case "$DIRECTION" in
-    left)  qdbus6 org.kde.KWin /KWin slotWindowQuickTileLeft ;;
-    right) qdbus6 org.kde.KWin /KWin slotWindowQuickTileRight ;;
+    left)  "$QDBUS" org.kde.KWin /KWin slotWindowQuickTileLeft ;;
+    right) "$QDBUS" org.kde.KWin /KWin slotWindowQuickTileRight ;;
     *)
         echo "Usage: $0 [left|right]" >&2
         exit 1
@@ -31,6 +34,6 @@ rofi -show window -p "Snap $OPPOSITE >"
 sleep 0.1
 
 case "$OPPOSITE" in
-    right) qdbus6 org.kde.KWin /KWin slotWindowQuickTileRight ;;
-    left)  qdbus6 org.kde.KWin /KWin slotWindowQuickTileLeft ;;
+    right) "$QDBUS" org.kde.KWin /KWin slotWindowQuickTileRight ;;
+    left)  "$QDBUS" org.kde.KWin /KWin slotWindowQuickTileLeft ;;
 esac

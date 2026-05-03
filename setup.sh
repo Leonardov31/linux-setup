@@ -484,10 +484,20 @@ NoDisplay=true
 EOF
   update-desktop-database "${HOME}/.local/share/applications/" 2>/dev/null || true
 
+  # Fedora 44 ships the binary as qdbus-qt6; other distros use qdbus6
+  QDBUS=$(command -v qdbus6 2>/dev/null || command -v qdbus-qt6 2>/dev/null || command -v qdbus 2>/dev/null || true)
+
   if command -v kwriteconfig6 &>/dev/null; then
-    # Enable the KWin script (Id = "snap-assist" from its metadata.json)
+    # Mark script enabled for future KWin restarts
     kwriteconfig6 --file kwinrc --group Plugins --key snap-assistEnabled true
-    qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true
+
+    # Load the script into the running KWin session immediately
+    if [[ -n "$QDBUS" ]]; then
+      "$QDBUS" org.kde.KWin /Scripting \
+        org.kde.kwin.Scripting.loadScript \
+        "${HOME}/.local/share/kwin/scripts/snap-assist/contents/code/main.js" \
+        snap-assist 2>/dev/null || true
+    fi
 
     # Register global shortcuts for the multi-window picker
     kwriteconfig6 --file kglobalshortcutsrc \

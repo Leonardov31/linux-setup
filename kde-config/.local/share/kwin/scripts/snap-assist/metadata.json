@@ -1,4 +1,5 @@
 {
+    "KPackageStructure": "KWin/Script",
     "KPlugin": {
         "Authors": [{"Name": "Leonardo Viana"}],
         "Description": "Auto-tiles the second window when you snap a window to half the screen (Windows 11-style snap assist)",
