@@ -281,10 +281,10 @@ yes | sdkmanager --licenses > /dev/null || \
 info "Installing Android SDK components..."
 sdkmanager --install \
   "platform-tools" \
-  "platforms;android-35" \
-  "build-tools;35.0.0" \
+  "platforms;android-36" \
+  "build-tools;36.0.0" \
   "emulator" \
-  "system-images;android-35;google_apis;x86_64"
+  "system-images;android-36;google_apis;x86_64"
 
 log "Android SDK installed at ${ANDROID_HOME}"
 
@@ -336,6 +336,18 @@ yes | flutter doctor --android-licenses > /dev/null || \
   warn "flutter doctor --android-licenses returned non-zero (may be benign)"
 
 log "Flutter ${FLUTTER_VERSION} installed and configured"
+
+# Point Flutter at Microsoft Edge for web dev (Chrome isn't installed by this
+# script). Edge is Chromium-based and works fine as a CHROME_EXECUTABLE.
+EDGE_PATH="$(command -v microsoft-edge 2>/dev/null || true)"
+if [[ -n "$EDGE_PATH" ]]; then
+  cat > "${FISH_CONF_DIR}/flutter-chrome.fish" <<EOF
+# Flutter web: use Microsoft Edge as CHROME_EXECUTABLE
+set -gx CHROME_EXECUTABLE "${EDGE_PATH}"
+EOF
+  export CHROME_EXECUTABLE="$EDGE_PATH"
+  log "CHROME_EXECUTABLE set to ${EDGE_PATH} for Flutter web"
+fi
 
 info "Running flutter doctor (informational; non-fatal)..."
 flutter doctor || true
