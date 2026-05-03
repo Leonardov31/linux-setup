@@ -466,16 +466,46 @@ if $is_plasma; then
 
   chmod +x "${HOME}/.local/bin/snap-assist-pick.sh" 2>/dev/null || true
 
-  # Enable the KWin script (Id = "snap-assist" from its metadata.json)
+  # .desktop launchers so KDE can bind global shortcuts to the picker scripts
+  mkdir -p "${HOME}/.local/share/applications"
+  cat > "${HOME}/.local/share/applications/snap-assist-left.desktop" <<EOF
+[Desktop Entry]
+Name=Snap Assist Left
+Exec=${HOME}/.local/bin/snap-assist-pick.sh left
+Type=Application
+NoDisplay=true
+EOF
+  cat > "${HOME}/.local/share/applications/snap-assist-right.desktop" <<EOF
+[Desktop Entry]
+Name=Snap Assist Right
+Exec=${HOME}/.local/bin/snap-assist-pick.sh right
+Type=Application
+NoDisplay=true
+EOF
+  update-desktop-database "${HOME}/.local/share/applications/" 2>/dev/null || true
+
   if command -v kwriteconfig6 &>/dev/null; then
+    # Enable the KWin script (Id = "snap-assist" from its metadata.json)
     kwriteconfig6 --file kwinrc --group Plugins --key snap-assistEnabled true
     qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true
+
+    # Register global shortcuts for the multi-window picker
+    kwriteconfig6 --file kglobalshortcutsrc \
+      --group "snap-assist-left.desktop" \
+      --key "_launch" "Meta+Shift+Left,none,Snap Assist Left"
+    kwriteconfig6 --file kglobalshortcutsrc \
+      --group "snap-assist-right.desktop" \
+      --key "_launch" "Meta+Shift+Right,none,Snap Assist Right"
+
+    # Reload the shortcuts daemon so the new bindings take effect immediately
+    kquitapp6 kglobalaccel 2>/dev/null || true
+    sleep 0.5
+    kglobalaccel6 & disown 2>/dev/null || kglobalaccel & disown 2>/dev/null || true
   fi
 
-  log "Snap Assist enabled — Win+Left/Right will auto-tile the second window"
-  info "For multi-window picker, add these shortcuts in System Settings → Keyboard:"
-  info "  Meta+Shift+Left  →  ${HOME}/.local/bin/snap-assist-pick.sh left"
-  info "  Meta+Shift+Right →  ${HOME}/.local/bin/snap-assist-pick.sh right"
+  log "Snap Assist enabled"
+  log "  Win+Left/Right          → auto-tiles the second window"
+  log "  Meta+Shift+Left/Right   → rofi picker when multiple windows are open"
 else
   info "Not a KDE Plasma session — skipping KDE config restore"
 fi
