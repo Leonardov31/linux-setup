@@ -33,7 +33,7 @@ This will install:
   • Docker (and add ${CURRENT_USER} to the docker group)
   • Android SDK (cmdline-tools, platform-tools, android-35)
   • Zed editor, Claude Code, GitHub Copilot CLI
-  • KDE Plasma look-and-feel + Snap Assist (Windows 11-style tiling)
+  • GNOME look-and-feel (if a backup exists in the repo)
 
 It will use ${BOLD}sudo${RESET} for system package installs and shell change.
 Setting up for user: ${BOLD}${CURRENT_USER}${RESET}  (arch: ${ARCH})
@@ -393,132 +393,6 @@ fish_add_path "$HOME/.local/bin"
 EOF
 export PATH="${HOME}/.local/bin:${PATH}"
 log "GitHub Copilot CLI installed (requires a paid GitHub Copilot subscription)"
-
-# =============================================================================
-#  11. KDE PLASMA LOOK-AND-FEEL RESTORE (optional, only on Plasma sessions)
-# =============================================================================
-# If a `kde-config/` directory exists in the repo on GitHub, fetch its files
-# and drop them into ~/.config and ~/.local/share. Skipped silently if the
-# user is not running KDE Plasma or if no backup is published.
-KDE_REPO="Leonardov31/linux-setup"
-KDE_BRANCH="main"
-KDE_REMOTE_DIR="kde-config"
-KDE_API_BASE="https://api.github.com/repos/${KDE_REPO}/contents/${KDE_REMOTE_DIR}?ref=${KDE_BRANCH}"
-
-# Detect Plasma. XDG_CURRENT_DESKTOP is most reliable; fall back to plasmashell
-# being installed (covers running setup.sh from a TTY).
-is_plasma=false
-if [[ "${XDG_CURRENT_DESKTOP:-}" == *"KDE"* ]] || command -v plasmashell &>/dev/null; then
-  is_plasma=true
-fi
-
-if $is_plasma; then
-  info "Checking for KDE config backup at github.com/${KDE_REPO}/${KDE_REMOTE_DIR}..."
-
-  # Probe the API: does the directory exist?
-  kde_probe="$(curl -fsSL -H 'Accept: application/vnd.github.v3+json' \
-                "$KDE_API_BASE" 2>/dev/null || true)"
-
-  if [[ -z "$kde_probe" ]] || echo "$kde_probe" | jq -e '.message? == "Not Found"' &>/dev/null; then
-    warn "No kde-config/ directory in the repo — skipping KDE restore"
-  else
-    info "Restoring KDE look-and-feel config..."
-
-    # Walk the directory tree recursively. GitHub's contents API only lists one
-    # level at a time, so recurse manually.
-    restore_dir() {
-      local api_url="$1" local_root="$2"
-      local listing
-      listing="$(curl -fsSL -H 'Accept: application/vnd.github.v3+json' "$api_url")"
-
-      # Iterate items
-      echo "$listing" | jq -r '.[] | "\(.type) \(.path) \(.download_url // "null") \(.url)"' \
-      | while read -r type path download_url url; do
-          # Strip the kde-config/ prefix to get the relative path under $HOME
-          rel="${path#${KDE_REMOTE_DIR}/}"
-          target="${HOME}/${rel}"
-
-          if [[ "$type" == "file" ]]; then
-            mkdir -p "$(dirname "$target")"
-            # Back up existing file if present
-            if [[ -f "$target" && ! -f "${target}.pre-setup.bak" ]]; then
-              cp -p "$target" "${target}.pre-setup.bak"
-            fi
-            curl -fsSL "$download_url" -o "$target"
-            echo "  • $rel"
-          elif [[ "$type" == "dir" ]]; then
-            mkdir -p "$target"
-            restore_dir "$url" "$target"
-          fi
-        done
-    }
-
-    restore_dir "$KDE_API_BASE" "$HOME"
-
-    log "KDE config restored. Original files (if any) saved with .pre-setup.bak suffix"
-    warn "Log out and back in — or run: kquitapp6 plasmashell && kstart6 plasmashell"
-    warn "to apply panel/desktop layout changes"
-  fi
-
-  # ── Snap Assist (Windows 11-style window tiling) ──────────────────────────
-  info "Setting up Snap Assist KWin script..."
-  sudo dnf install -y rofi
-
-  chmod +x "${HOME}/.local/bin/snap-assist-pick.sh" 2>/dev/null || true
-
-  # .desktop launchers so KDE can bind global shortcuts to the picker scripts
-  mkdir -p "${HOME}/.local/share/applications"
-  cat > "${HOME}/.local/share/applications/snap-assist-left.desktop" <<EOF
-[Desktop Entry]
-Name=Snap Assist Left
-Exec=${HOME}/.local/bin/snap-assist-pick.sh left
-Type=Application
-NoDisplay=true
-EOF
-  cat > "${HOME}/.local/share/applications/snap-assist-right.desktop" <<EOF
-[Desktop Entry]
-Name=Snap Assist Right
-Exec=${HOME}/.local/bin/snap-assist-pick.sh right
-Type=Application
-NoDisplay=true
-EOF
-  update-desktop-database "${HOME}/.local/share/applications/" 2>/dev/null || true
-
-  # Fedora 44 ships the binary as qdbus-qt6; other distros use qdbus6
-  QDBUS=$(command -v qdbus6 2>/dev/null || command -v qdbus-qt6 2>/dev/null || command -v qdbus 2>/dev/null || true)
-
-  if command -v kwriteconfig6 &>/dev/null; then
-    # Mark script enabled for future KWin restarts
-    kwriteconfig6 --file kwinrc --group Plugins --key snap-assistEnabled true
-
-    # Load the script into the running KWin session immediately
-    if [[ -n "$QDBUS" ]]; then
-      "$QDBUS" org.kde.KWin /Scripting \
-        org.kde.kwin.Scripting.loadScript \
-        "${HOME}/.local/share/kwin/scripts/snap-assist/contents/code/main.js" \
-        snap-assist 2>/dev/null || true
-    fi
-
-    # Register global shortcuts for the multi-window picker
-    kwriteconfig6 --file kglobalshortcutsrc \
-      --group "snap-assist-left.desktop" \
-      --key "_launch" "Meta+Shift+Left,none,Snap Assist Left"
-    kwriteconfig6 --file kglobalshortcutsrc \
-      --group "snap-assist-right.desktop" \
-      --key "_launch" "Meta+Shift+Right,none,Snap Assist Right"
-
-    # Reload the shortcuts daemon so the new bindings take effect immediately
-    kquitapp6 kglobalaccel 2>/dev/null || true
-    sleep 0.5
-    kglobalaccel6 & disown 2>/dev/null || kglobalaccel & disown 2>/dev/null || true
-  fi
-
-  log "Snap Assist enabled"
-  log "  Win+Left/Right          → auto-tiles the second window"
-  log "  Meta+Shift+Left/Right   → rofi picker when multiple windows are open"
-else
-  info "Not a KDE Plasma session — skipping KDE config restore"
-fi
 
 # =============================================================================
 #  FINALIZE: Set Fish as default shell
