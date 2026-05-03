@@ -33,7 +33,7 @@ This will install:
   • Docker (and add ${CURRENT_USER} to the docker group)
   • Android SDK (cmdline-tools, platform-tools, android-35)
   • Zed editor, Claude Code, GitHub Copilot CLI
-  • KDE Plasma look-and-feel (if a backup exists in the repo)
+  • KDE Plasma look-and-feel + Snap Assist (Windows 11-style tiling)
 
 It will use ${BOLD}sudo${RESET} for system package installs and shell change.
 Setting up for user: ${BOLD}${CURRENT_USER}${RESET}  (arch: ${ARCH})
@@ -459,6 +459,23 @@ if $is_plasma; then
     warn "Log out and back in — or run: kquitapp6 plasmashell && kstart6 plasmashell"
     warn "to apply panel/desktop layout changes"
   fi
+
+  # ── Snap Assist (Windows 11-style window tiling) ──────────────────────────
+  info "Setting up Snap Assist KWin script..."
+  sudo dnf install -y rofi
+
+  chmod +x "${HOME}/.local/bin/snap-assist-pick.sh" 2>/dev/null || true
+
+  # Enable the KWin script (Id = "snap-assist" from its metadata.json)
+  if command -v kwriteconfig6 &>/dev/null; then
+    kwriteconfig6 --file kwinrc --group Plugins --key snap-assistEnabled true
+    qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true
+  fi
+
+  log "Snap Assist enabled — Win+Left/Right will auto-tile the second window"
+  info "For multi-window picker, add these shortcuts in System Settings → Keyboard:"
+  info "  Meta+Shift+Left  →  ${HOME}/.local/bin/snap-assist-pick.sh left"
+  info "  Meta+Shift+Right →  ${HOME}/.local/bin/snap-assist-pick.sh right"
 else
   info "Not a KDE Plasma session — skipping KDE config restore"
 fi
