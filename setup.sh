@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  Fedora 44 Setup Script
-#  Run with: bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/setup.sh)
+#  Run with: bash <(curl -fsSL https://raw.githubusercontent.com/Leonardov31/linux-setup/main/setup.sh)
 # =============================================================================
 
 set -euo pipefail
