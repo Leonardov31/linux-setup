@@ -29,7 +29,8 @@ ${BOLD}Ubuntu 26.04 LTS Setup Script${RESET}
 This will install:
   • Fish shell (and set it as default)
   • Google Chrome, 1Password (+ CLI + SSH agent config)
-  • asdf (Go binary, v0.16+) with Node.js LTS and Flutter
+  • asdf (Go binary, v0.16+) with Node.js LTS
+  • Flutter (snap, stable channel)
   • Docker (and add ${CURRENT_USER} to the docker group)
   • Android SDK (cmdline-tools, platform-tools, android-36)
   • Zed editor, Claude Code, GitHub Copilot CLI
@@ -301,9 +302,9 @@ fish_add_path "${JAVA_HOME_PATH}/bin"
 EOF
 
 # =============================================================================
-#  7. FLUTTER (via asdf)
+#  7. FLUTTER (via snap)
 # =============================================================================
-info "Installing Flutter via asdf..."
+info "Installing Flutter via snap..."
 
 # Flutter Linux desktop dependencies (Ubuntu/Debian package names)
 sudo apt-get install -y \
@@ -314,20 +315,20 @@ sudo apt-get install -y \
   libxi-dev libxrandr-dev libxrender-dev \
   libxtst-dev libatspi2.0-dev
 
-asdf plugin add flutter https://github.com/asdf-community/asdf-flutter.git 2>/dev/null || \
-  warn "flutter plugin already added, skipping"
+# snapd is pre-installed on Ubuntu but ensure it's present
+sudo apt-get install -y snapd
 
-# Pin to the latest STABLE channel (asdf-flutter uses suffixes like -stable / -beta)
-info "Resolving latest stable Flutter version..."
-FLUTTER_VERSION="$(asdf list all flutter 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+-stable$' | tail -1)"
-[[ -n "$FLUTTER_VERSION" ]] || die "Could not resolve latest stable Flutter version"
-info "Installing Flutter ${FLUTTER_VERSION}..."
-asdf install flutter "$FLUTTER_VERSION"
-asdf set -u flutter "$FLUTTER_VERSION"
-asdf reshim flutter
+sudo snap install flutter --classic
 
-# Make sure the Flutter shim is on PATH for the rest of this script
-export PATH="${ASDF_DATA_DIR}/shims:${PATH}"
+# Make flutter available for the rest of this script
+export PATH="/snap/bin:${PATH}"
+
+# Fish: ensure /snap/bin is on PATH (Ubuntu's system Fish config usually covers
+# this, but be explicit so the conf.d setup is self-contained)
+cat > "${FISH_CONF_DIR}/snap.fish" <<'EOF'
+# Snap binaries
+fish_add_path "/snap/bin"
+EOF
 
 # Point Flutter at the Android SDK
 flutter config --android-sdk "$ANDROID_HOME" --no-analytics
@@ -336,7 +337,7 @@ flutter config --android-sdk "$ANDROID_HOME" --no-analytics
 yes | flutter doctor --android-licenses > /dev/null || \
   warn "flutter doctor --android-licenses returned non-zero (may be benign)"
 
-log "Flutter ${FLUTTER_VERSION} installed and configured"
+log "Flutter (stable) installed via snap and configured"
 
 # Point Flutter at Google Chrome for web dev
 CHROME_PATH="$(command -v google-chrome-stable 2>/dev/null || command -v google-chrome 2>/dev/null || true)"
