@@ -28,7 +28,7 @@ cat <<EOF
 ${BOLD}Ubuntu 26.04 LTS Setup Script${RESET}
 This will install:
   • Fish shell (and set it as default)
-  • Google Chrome, 1Password (+ CLI + SSH agent config)
+  • Google Chrome, 1Password (+ CLI + SSH agent config), Pritunl VPN
   • asdf (Go binary, v0.16+) with Node.js LTS
   • Flutter (snap, stable channel)
   • Docker (and add ${CURRENT_USER} to the docker group)
@@ -467,6 +467,26 @@ fi
 log "Monitor brightness control ready — log out/in for udev rules and module to apply"
 
 # =============================================================================
+#  13. PRITUNL VPN CLIENT
+# =============================================================================
+info "Installing Pritunl VPN client..."
+
+# Fetch the Pritunl signing key from Ubuntu's keyserver and store it in the
+# modern signed-by location (avoids the deprecated apt-key command)
+gpg --batch --keyserver hkp://keyserver.ubuntu.com \
+  --recv-keys 7568D9BB55FF9E5287D586017AE645C0CF8E292A 2>/dev/null
+gpg --batch --export 7568D9BB55FF9E5287D586017AE645C0CF8E292A \
+  | sudo tee /usr/share/keyrings/pritunl-keyring.gpg > /dev/null
+
+echo "deb [signed-by=/usr/share/keyrings/pritunl-keyring.gpg] \
+https://repo.pritunl.com/stable/apt $(lsb_release -cs) main" \
+  | sudo tee /etc/apt/sources.list.d/pritunl.list > /dev/null
+
+sudo apt-get update -y
+sudo apt-get install -y pritunl-client-electron
+log "Pritunl VPN client installed"
+
+# =============================================================================
 #  FINALIZE: Set Fish as default shell
 # =============================================================================
 # Done last so a mid-script failure doesn't leave the user logged into a
@@ -502,4 +522,5 @@ echo -e "  8. Verify Android:  ${BLUE}sdkmanager --list_installed${RESET}"
 echo -e "  9. Verify Zed:      ${BLUE}zed --version${RESET}"
 echo -e " 10. ${YELLOW}Android Studio${RESET} (optional GUI IDE):"
 echo -e "     ${BLUE}flatpak install flathub com.google.AndroidStudio${RESET}"
+echo -e " 11. Open ${BOLD}Pritunl${RESET} and add your VPN profile URI"
 echo
