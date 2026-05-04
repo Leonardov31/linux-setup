@@ -425,6 +425,47 @@ else
 fi
 
 # =============================================================================
+#  12. MONITOR BRIGHTNESS (ddcutil + GNOME extension)
+# =============================================================================
+info "Setting up monitor brightness control..."
+
+# ddcutil   — hardware DDC/CI brightness/contrast for external monitors (I2C)
+# brightnessctl — sysfs backlight control for internal laptop displays
+sudo apt-get install -y ddcutil brightnessctl
+
+# i2c-dev kernel module is required by ddcutil; load it now and persist across reboots
+sudo modprobe i2c-dev
+echo "i2c-dev" | sudo tee /etc/modules-load.d/i2c-dev.conf > /dev/null
+
+# Modern udev rule: give the logged-in user (via logind uaccess) access to
+# /dev/i2c-* without needing a separate i2c group
+echo 'KERNEL=="i2c-[0-9]*", TAG+="uaccess"' \
+  | sudo tee /etc/udev/rules.d/45-ddcutil-i2c.rules > /dev/null
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+# GNOME extension: "Brightness control using ddcutil" (ID 2645)
+# Adds per-monitor brightness sliders inside the quick-settings panel
+BRIGHTNESS_EXT_UUID="display-brightness-ddcutil@themightydeity.github.com"
+BRIGHTNESS_EXT_DEST="${HOME}/.local/share/gnome-shell/extensions/${BRIGHTNESS_EXT_UUID}"
+
+BRIGHTNESS_DOWNLOAD_URL="$(curl -fsSL \
+  "https://extensions.gnome.org/extension-info/?uuid=${BRIGHTNESS_EXT_UUID}&shell_version=${GNOME_VER}" \
+  | jq -r '"https://extensions.gnome.org" + .download_url')"
+
+if [[ -z "$BRIGHTNESS_DOWNLOAD_URL" || "$BRIGHTNESS_DOWNLOAD_URL" == "https://extensions.gnome.orgnull" ]]; then
+  warn "Could not fetch brightness extension for GNOME ${GNOME_VER} — install manually: extensions.gnome.org/extension/2645"
+else
+  mkdir -p "$BRIGHTNESS_EXT_DEST"
+  curl -fsSL "$BRIGHTNESS_DOWNLOAD_URL" | unzip -q -o - -d "$BRIGHTNESS_EXT_DEST"
+  gnome-extensions enable "$BRIGHTNESS_EXT_UUID" 2>/dev/null || \
+    warn "Brightness extension will activate after next login"
+  log "GNOME brightness extension installed (sliders in quick-settings panel)"
+fi
+
+log "Monitor brightness control ready — log out/in for udev rules and module to apply"
+
+# =============================================================================
 #  FINALIZE: Set Fish as default shell
 # =============================================================================
 # Done last so a mid-script failure doesn't leave the user logged into a
@@ -447,6 +488,7 @@ echo -e "     • Fish to be your default shell"
 echo -e "     • Docker group membership"
 echo -e "     • Android/Flutter/asdf PATH vars"
 echo -e "     • Hide Top Bar extension (top bar auto-hides on window overlap)"
+echo -e "     • Monitor brightness control (udev i2c rules + ddcutil)"
 echo -e "  2. Open ${BOLD}1Password${RESET} → Settings → Developer → enable SSH Agent"
 echo -e "     (only github.com / gitlab.com / bitbucket.org are routed by default —"
 echo -e "      edit ~/.ssh/config to add more hosts)"
