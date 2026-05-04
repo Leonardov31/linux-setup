@@ -392,6 +392,39 @@ export PATH="${HOME}/.local/bin:${PATH}"
 log "GitHub Copilot CLI installed (requires a paid GitHub Copilot subscription)"
 
 # =============================================================================
+#  11. GNOME TOP BAR — Auto-hide on window overlap (Hide Top Bar extension)
+# =============================================================================
+info "Installing Hide Top Bar GNOME extension (intellihide)..."
+
+# Resolve the running GNOME Shell version (major.minor, e.g. "48.0")
+GNOME_VER="$(gnome-shell --version 2>/dev/null | grep -oP '\d+\.\d+' | head -1)"
+EXT_UUID="hidetopbar@mathieu.bidon.ca"
+EXT_DEST="${HOME}/.local/share/gnome-shell/extensions/${EXT_UUID}"
+
+# Query extensions.gnome.org for the version-matched download URL
+EXT_DOWNLOAD_URL="$(curl -fsSL \
+  "https://extensions.gnome.org/extension-info/?uuid=${EXT_UUID}&shell_version=${GNOME_VER}" \
+  | jq -r '"https://extensions.gnome.org" + .download_url')"
+
+if [[ -z "$EXT_DOWNLOAD_URL" || "$EXT_DOWNLOAD_URL" == "https://extensions.gnome.orgnull" ]]; then
+  warn "Could not fetch Hide Top Bar for GNOME ${GNOME_VER} — install manually: extensions.gnome.org/extension/545"
+else
+  mkdir -p "$EXT_DEST"
+  curl -fsSL "$EXT_DOWNLOAD_URL" | unzip -q -o - -d "$EXT_DEST"
+
+  # Enable the extension (takes effect after the shell restarts on next login)
+  gnome-extensions enable "$EXT_UUID" 2>/dev/null || \
+    warn "Could not enable extension yet — it will activate after next login"
+
+  # Intellihide: hide the bar only when a window overlaps it, reveal on mouse hover
+  gsettings set org.gnome.shell.extensions.hidetopbar enable-intellihide true
+  gsettings set org.gnome.shell.extensions.hidetopbar enable-active-window true
+  gsettings set org.gnome.shell.extensions.hidetopbar mouse-sensitive true
+
+  log "Hide Top Bar installed — top bar will hide when a window touches it (active after next login)"
+fi
+
+# =============================================================================
 #  FINALIZE: Set Fish as default shell
 # =============================================================================
 # Done last so a mid-script failure doesn't leave the user logged into a
@@ -413,6 +446,7 @@ echo -e "  1. ${YELLOW}Log out and back in${RESET} — required for:"
 echo -e "     • Fish to be your default shell"
 echo -e "     • Docker group membership"
 echo -e "     • Android/Flutter/asdf PATH vars"
+echo -e "     • Hide Top Bar extension (top bar auto-hides on window overlap)"
 echo -e "  2. Open ${BOLD}1Password${RESET} → Settings → Developer → enable SSH Agent"
 echo -e "     (only github.com / gitlab.com / bitbucket.org are routed by default —"
 echo -e "      edit ~/.ssh/config to add more hosts)"
