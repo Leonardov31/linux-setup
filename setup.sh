@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Fedora 44 Setup Script
+#  Ubuntu 26.04 LTS Setup Script
 #  Run with: bash <(curl -fsSL https://raw.githubusercontent.com/Leonardov31/linux-setup/main/setup.sh)
 # =============================================================================
 
@@ -17,7 +17,7 @@ die()  { echo -e "${RED}[✘]${RESET} $*" >&2; exit 1; }
 
 # ── Preflight ─────────────────────────────────────────────────────────────────
 [[ $EUID -eq 0 ]] && die "Run this script as your regular user (not root). sudo will be used internally."
-command -v dnf &>/dev/null || die "This script requires dnf (Fedora)."
+command -v apt-get &>/dev/null || die "This script requires apt-get (Ubuntu/Debian)."
 
 CURRENT_USER="$(whoami)"
 ARCH="$(uname -m)"
@@ -25,13 +25,13 @@ ARCH="$(uname -m)"
 # ── Banner / consent ──────────────────────────────────────────────────────────
 cat <<EOF
 
-${BOLD}Fedora 44 Setup Script${RESET}
+${BOLD}Ubuntu 26.04 LTS Setup Script${RESET}
 This will install:
   • Fish shell (and set it as default)
-  • Microsoft Edge, 1Password (+ CLI + SSH agent config)
+  • Google Chrome, 1Password (+ CLI + SSH agent config)
   • asdf (Go binary, v0.16+) with Node.js LTS and Flutter
   • Docker (and add ${CURRENT_USER} to the docker group)
-  • Android SDK (cmdline-tools, platform-tools, android-35)
+  • Android SDK (cmdline-tools, platform-tools, android-36)
   • Zed editor, Claude Code, GitHub Copilot CLI
   • GNOME look-and-feel (if a backup exists in the repo)
 
@@ -42,8 +42,9 @@ EOF
 read -r -p "Press Enter to continue, or Ctrl-C to abort... " _
 
 # ── Base prerequisites ────────────────────────────────────────────────────────
-info "Installing base prerequisites (git, curl, tar, jq)..."
-sudo dnf install -y git curl tar jq unzip wget
+info "Updating package lists and installing base prerequisites (git, curl, tar, jq)..."
+sudo apt-get update -y
+sudo apt-get install -y git curl tar jq unzip wget ca-certificates gnupg lsb-release software-properties-common
 log "Base prerequisites installed"
 
 # Fish conf.d dir is referenced by many sections — create once up front
@@ -54,7 +55,7 @@ mkdir -p "$FISH_CONF_DIR"
 #  1. FISH SHELL
 # =============================================================================
 info "Installing Fish shell..."
-sudo dnf install -y fish
+sudo apt-get install -y fish
 
 FISH_PATH="$(command -v fish)"
 if ! grep -qF "$FISH_PATH" /etc/shells; then
@@ -66,39 +67,40 @@ fi
 log "Fish installed (${FISH_PATH}) — default shell will be set at the end"
 
 # =============================================================================
-#  2. MICROSOFT EDGE
+#  2. GOOGLE CHROME
 # =============================================================================
-info "Installing Microsoft Edge..."
-sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+info "Installing Google Chrome..."
+curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+  | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg
 
-cat <<'EOF' | sudo tee /etc/yum.repos.d/microsoft-edge.repo > /dev/null
-[microsoft-edge]
-name=microsoft-edge
-baseurl=https://packages.microsoft.com/yumrepos/edge
-enabled=1
-gpgcheck=1
-gpgkey=https://packages.microsoft.com/keys/microsoft.asc
-EOF
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] \
+http://dl.google.com/linux/chrome/deb/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
 
-sudo dnf install -y microsoft-edge-stable
-log "Microsoft Edge installed"
+sudo apt-get update -y
+sudo apt-get install -y google-chrome-stable
+log "Google Chrome installed"
 
 # =============================================================================
 #  3. 1PASSWORD
 # =============================================================================
 info "Installing 1Password..."
-sudo rpm --import https://downloads.1password.com/linux/keys/1password.asc
+curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+  | sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
 
-cat <<'EOF' | sudo tee /etc/yum.repos.d/1password.repo > /dev/null
-[1password]
-name=1Password Stable Channel
-baseurl=https://downloads.1password.com/linux/rpm/stable/$basearch
-enabled=1
-gpgcheck=1
-gpgkey=https://downloads.1password.com/linux/keys/1password.asc
-EOF
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] \
+https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
+  | sudo tee /etc/apt/sources.list.d/1password.list > /dev/null
 
-sudo dnf install -y 1password 1password-cli
+sudo mkdir -p /etc/debsig/policies/AC2D62742012EA22
+curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol \
+  | sudo tee /etc/debsig/policies/AC2D62742012EA22/1password.pol > /dev/null
+sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22
+curl -sS https://downloads.1password.com/linux/keys/1password.asc \
+  | sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+
+sudo apt-get update -y
+sudo apt-get install -y 1password 1password-cli
 log "1Password + CLI installed"
 
 # ── 1Password SSH Agent ───────────────────────────────────────────────────────
@@ -209,22 +211,19 @@ log "Node.js ${NODE_VERSION:-(LTS)} set as default in \$HOME"
 info "Installing Docker..."
 
 # Remove any old conflicting packages
-sudo dnf remove -y docker docker-client docker-client-latest docker-common \
-  docker-latest docker-latest-logrotate docker-logrotate docker-selinux \
-  docker-engine-selinux docker-engine 2>/dev/null || true
+sudo apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
 
-sudo dnf install -y dnf-plugins-core
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
 
-# `dnf config-manager addrepo --from-repofile=URL` has a bug in dnf5
-# (rpm-software-management/dnf5#1603): it chokes on empty lines in
-# docker-ce.repo with "Cannot set repository option '#1= '". Sidestep it
-# entirely by writing the .repo file directly, the same way we did for
-# Microsoft Edge and 1Password above.
-DOCKER_REPO_URL="https://download.docker.com/linux/fedora/docker-ce.repo"
-info "Adding Docker CE repo..."
-curl -fsSL "$DOCKER_REPO_URL" | sudo tee /etc/yum.repos.d/docker-ce.repo > /dev/null
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
-sudo dnf install -y docker-ce docker-ce-cli containerd.io \
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
+https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update -y
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
   docker-buildx-plugin docker-compose-plugin
 
 sudo systemctl enable --now docker
@@ -234,19 +233,18 @@ log "Docker installed and enabled (log out/in for group membership to apply)"
 # =============================================================================
 #  6. ANDROID SDK (Command-line tools)
 # =============================================================================
-info "Installing Android SDK dependencies (JDK 25)..."
+info "Installing Android SDK dependencies (JDK 21)..."
 
-# Fedora 44 ships JDK 25 as the system OpenJDK. JDK 21 was pulled earlier
-# than originally scheduled (https://fedoraproject.org/wiki/Changes/Java21RemovedEarlierThenScheduled),
-# and JDK 17 was retired back in F42. AGP officially targets JDK 17 but runs
-# fine on newer JDKs with recent Gradle. If a project's Gradle wrapper is
-# too old to handle JDK 25, bump its `distributionUrl` in
-# gradle/wrapper/gradle-wrapper.properties to gradle 8.10+.
-sudo dnf install -y java-25-openjdk java-25-openjdk-devel
+# Ubuntu 26.04 ships OpenJDK 21 LTS, which is fully compatible with recent
+# Android Gradle Plugin versions. JDK 21 is the recommended LTS choice for
+# Android development. If your project's Gradle wrapper is too old to handle
+# JDK 21, bump its `distributionUrl` in gradle/wrapper/gradle-wrapper.properties
+# to gradle 8.0+.
+sudo apt-get install -y openjdk-21-jdk openjdk-21-jre
 
-# Locate the JDK 25 install root (typically /usr/lib/jvm/java-25-openjdk-...)
-JAVA_HOME_PATH="$(rpm -ql java-25-openjdk-devel | grep -m1 '/bin/javac$' | sed 's|/bin/javac$||')"
-[[ -d "$JAVA_HOME_PATH" ]] || die "Could not locate JDK 25 install root"
+# Locate the JDK 21 install root (e.g. /usr/lib/jvm/java-21-openjdk-amd64)
+JAVA_HOME_PATH="$(dirname "$(dirname "$(readlink -f "$(which javac)")")")"
+[[ -d "$JAVA_HOME_PATH" ]] || die "Could not locate JDK 21 install root"
 export JAVA_HOME="$JAVA_HOME_PATH"
 export PATH="${JAVA_HOME}/bin:${PATH}"
 log "JAVA_HOME pinned to ${JAVA_HOME}"
@@ -307,14 +305,14 @@ EOF
 # =============================================================================
 info "Installing Flutter via asdf..."
 
-# Flutter Linux desktop dependencies
-sudo dnf install -y \
-  clang cmake ninja-build gtk3-devel \
-  mesa-libGL-devel mesa-libGLU-devel \
-  libX11-devel libXcomposite-devel libXcursor-devel \
-  libXdamage-devel libXext-devel libXfixes-devel \
-  libXi-devel libXrandr-devel libXrender-devel \
-  libXtst-devel at-spi2-core-devel
+# Flutter Linux desktop dependencies (Ubuntu/Debian package names)
+sudo apt-get install -y \
+  clang cmake ninja-build libgtk-3-dev \
+  libgl1-mesa-dev libglu1-mesa-dev \
+  libx11-dev libxcomposite-dev libxcursor-dev \
+  libxdamage-dev libxext-dev libxfixes-dev \
+  libxi-dev libxrandr-dev libxrender-dev \
+  libxtst-dev libatspi2.0-dev
 
 asdf plugin add flutter https://github.com/asdf-community/asdf-flutter.git 2>/dev/null || \
   warn "flutter plugin already added, skipping"
@@ -340,16 +338,15 @@ yes | flutter doctor --android-licenses > /dev/null || \
 
 log "Flutter ${FLUTTER_VERSION} installed and configured"
 
-# Point Flutter at Microsoft Edge for web dev (Chrome isn't installed by this
-# script). Edge is Chromium-based and works fine as a CHROME_EXECUTABLE.
-EDGE_PATH="$(command -v microsoft-edge 2>/dev/null || true)"
-if [[ -n "$EDGE_PATH" ]]; then
+# Point Flutter at Google Chrome for web dev
+CHROME_PATH="$(command -v google-chrome-stable 2>/dev/null || command -v google-chrome 2>/dev/null || true)"
+if [[ -n "$CHROME_PATH" ]]; then
   cat > "${FISH_CONF_DIR}/flutter-chrome.fish" <<EOF
-# Flutter web: use Microsoft Edge as CHROME_EXECUTABLE
-set -gx CHROME_EXECUTABLE "${EDGE_PATH}"
+# Flutter web: use Google Chrome as CHROME_EXECUTABLE
+set -gx CHROME_EXECUTABLE "${CHROME_PATH}"
 EOF
-  export CHROME_EXECUTABLE="$EDGE_PATH"
-  log "CHROME_EXECUTABLE set to ${EDGE_PATH} for Flutter web"
+  export CHROME_EXECUTABLE="$CHROME_PATH"
+  log "CHROME_EXECUTABLE set to ${CHROME_PATH} for Flutter web"
 fi
 
 info "Running flutter doctor (informational; non-fatal)..."
