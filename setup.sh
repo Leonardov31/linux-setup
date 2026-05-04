@@ -430,9 +430,8 @@ fi
 # =============================================================================
 info "Setting up monitor brightness control..."
 
-# ddcutil   — hardware DDC/CI brightness/contrast for external monitors (I2C)
-# brightnessctl — sysfs backlight control for internal laptop displays
-sudo apt-get install -y ddcutil brightnessctl
+# ddcutil — hardware DDC/CI brightness/contrast for external monitors (I2C)
+sudo apt-get install -y ddcutil
 
 # i2c-dev kernel module is required by ddcutil; load it now and persist across reboots
 sudo modprobe i2c-dev
